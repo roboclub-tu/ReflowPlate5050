@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+*.pio
+*.vscode
+
+working_example/
+Touch_shield_new/
+TouchScreen_Calibr_native/
+
+
