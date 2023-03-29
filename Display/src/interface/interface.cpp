@@ -4,6 +4,7 @@
 #include <vector>
 #include <Adafruit_GFX.h>
 #include <MCUFRIEND_kbv.h>
+#include "settings_btn.h"
 MCUFRIEND_kbv tft;
 
 // #include <TouchScreen.h> //original version (doesn't work with this tft pinout!)
@@ -26,7 +27,7 @@ const int screenWidth = 320, screenHeight = 240;
 
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 
-Adafruit_GFX_Button sect1_btn, sect2_btn, sect3_btn, sect4_btn, center_btn, onof_btn;
+Adafruit_GFX_Button sect1_btn, sect2_btn, sect3_btn, sect4_btn, center_btn, onof_btn, settings_btn;
 bool sect1_state = false, sect2_state = false, sect3_state = false, sect4_state = false, onof_state = false;
 
 int pixel_x, pixel_y; // Touch_getXY() updates global vars
@@ -73,19 +74,17 @@ void drawCenterPointRoundRect(int16_t x, int16_t y, int16_t w, int16_t h,
     tft.drawRoundRect(x - (w / 2), y - (h / 2), w, h, r, color);
 }
 
-int lastXValue = 0;
+int lastXValue = 76;
 
 void writeHeader(String text)
 {
-    // tft.fillRect(0, 0, 320, 35, BLACK); //delete old text
-
     int fontSize = 2;
     int textLen = text.length();
     tft.setTextColor(WHITE, BLACK);
     tft.setTextSize(fontSize);
 
     tft.setCursor(lastXValue, 15);
-    tft.print(String("                    "));
+    tft.print(String("               "));
 
     lastXValue = (screenWidth / 2) - (textLen * 3 * fontSize);
     tft.setCursor(lastXValue, 15);
@@ -112,6 +111,10 @@ void writeTemp(int section, int temp, int goalTemp = 0)
     tft.print(text);
 }
 
+void drawSettingsImage(){
+    tft.drawBitmap(10, 10, setting_btn, 35, 33, WHITE, BLACK);
+}
+
 std::vector<Adafruit_GFX_Button> sections;
 bool sectionsState[4] = {false, false, false, false};
 bool onof_bt_state = false;
@@ -134,7 +137,8 @@ void setup(void)
     sect3_btn.initButton(&tft, 126.5 - 15, 153.5, 67 + 30, 67, WHITE, BLACK, WHITE, const_cast<char *>(""), 2, 0, 0, 0, 1);
     sect4_btn.initButton(&tft, 193.5 + 15, 153.5, 67 + 30, 67, WHITE, BLACK, WHITE, const_cast<char *>(""), 2, 0, 0, 1, 0);
     // center_btn.initButton(&tft, 160, 120, 30, 30, 30, WHITE, BLACK, WHITE, const_cast<char *>(""), 2);
-    onof_btn.initButton(&tft, 160, 215, 90, 35, WHITE, BLACK, WHITE, const_cast<char *>("START"), 2);
+    onof_btn.initButton(&tft, 160, 215, 90, 35, WHITE, GREEN, BLACK, const_cast<char *>("START"), 2);
+    settings_btn.initButton(&tft, 27, 26, 40, 40, BLACK, BLACK, BLACK, const_cast<char *>(""), 2); // (right params were 286, 21, 53, 40)
 
     sections.push_back(sect1_btn);
     sections.push_back(sect2_btn);
@@ -156,14 +160,10 @@ void setup(void)
         sections[i].drawButton(false);
     }
 
-    // sect1_btn.drawButton(false);
-    // sect2_btn.drawButton(false);
-    // sect3_btn.drawButton(false);
-    // sect4_btn.drawButton(false);
-
-    // center_btn.drawButton(false);
-
     onof_btn.drawButton(false);
+    settings_btn.drawButton(false);
+
+    drawSettingsImage();
 
     writeHeader("Select section");
 }
@@ -171,12 +171,8 @@ void setup(void)
 void handleSectionPress(int i, int pixel_x, int pixel_y)
 {
     bool down = Touch_getXY();
-
     sections[i].press(down && sections[i].contains(pixel_x, pixel_y));
-    if (sections[i].justReleased())
-    {
-        // sections[i].drawButton();
-    }
+
     if (sections[i].justPressed())
     {
         if (sectionsState[i]) // on
@@ -189,112 +185,104 @@ void handleSectionPress(int i, int pixel_x, int pixel_y)
             sections[i + 4].drawButton();
             sectionsState[i] = true;
         }
-
-        // Serial.print("Changed section ");
-        // Serial.println(i);
-        // Serial.println(sectionsState[i]);
-        // Serial.println();
-
-        // action
     }
 }
 
-void handleOnOf(bool state)
+void showStartScreen()
 {
-    if (state)
-    { // on
-      // for (size_t i = 0; i < 4; i++)
-      // {
-      //     if (sectionsState[i] == true)
-      //     {
-      //         sections[i + 4].drawButton(RED, RED, WHITE, true);
-      //     }
-      // }
+    writeHeader("Select section");
+    // change the on/of button from stop to start
+    onof_btn.initButton(&tft, 160, 215, 90, 35, WHITE, GREEN, BLACK, const_cast<char *>("START"), 2);
+    onof_btn.drawButton(false);
+
+    // clean the sections
+    for (size_t i = 0; i < 4; i++)
+    {
+        if (sectionsState[i] == true)
+        {
+            sections[i + 4].drawButton(false);
+        }
     }
-    else
-    { // of
+
+    onof_bt_state = false;
+}
+
+int currentTemp = 238;
+int goalTemp = 240;
+unsigned long updateInterval = 500;
+unsigned long lastUpdateTime[4];
+
+bool heating()
+{
+    // simulation of heating sections
+
+    // while (currentTemp <= goalTemp)
+    if (currentTemp <= goalTemp)
+    {
         for (size_t i = 0; i < 4; i++)
         {
             if (sectionsState[i] == true)
             {
-                sections[i + 4].drawButton(false);
+                // TODO: get real temperature
+                unsigned long now = millis();
+
+                if (now - lastUpdateTime[i] >= updateInterval)
+                {
+                    lastUpdateTime[i] = now;
+
+                    sections[i + 4].drawButton(RED, RED, WHITE, String(currentTemp) + "/" + goalTemp, true);
+                    ++currentTemp;
+                }
             }
         }
+
+        return false;
     }
+
+    return true;
 }
 
-unsigned long previousMillis1 = 0;
-unsigned long previousMillis2 = 0;
-unsigned long previousMillis3 = 0;
-unsigned long previousMillis4 = 0;
-unsigned long interval = 300;
+unsigned long timerUpdateInterval = 1000;
+unsigned long startTime;        // start time in milliseconds
+unsigned long duration = 13000; // duration in milliseconds
+bool started = false;
 
-void startHeating()
+bool timer()
 {
-    writeHeader("Heating");
-
-    // TODO: organize the code in functions
-    // TODO: make ite possible to turn of the system during heating
-
-    // simulation of heating sections
-    int currentTemp = 101;
-    int goalTemp = 240;
-
-    if (sectionsState[0] || sectionsState[1] || sectionsState[2] || sectionsState[3]){
-        while (currentTemp <= goalTemp)
-        {
-            if (sectionsState[0] == true)
-            {
-                // TODO: get real temperature
-                unsigned long currentMillis = millis();
-
-                if (currentMillis - previousMillis1 >= interval)
-                {
-                    previousMillis1 = currentMillis;
-
-                    sections[0 + 4].drawButton(RED, RED, WHITE, String(currentTemp) + "/" + goalTemp, true);
-                    ++currentTemp;
-                }
-            }
-
-            if (sectionsState[1] == true)
-            {
-                // TODO: get real temperature
-                unsigned long currentMillis = millis();
-                if (currentMillis - previousMillis2 >= interval)
-                {
-                    previousMillis2 = currentMillis;
-
-                    sections[1 + 4].drawButton(RED, RED, WHITE, String(currentTemp) + "/" + goalTemp, true);
-                    ++currentTemp;
-                }
-            }
-            if (sectionsState[2] == true)
-            {
-                // TODO: get real temperature
-                unsigned long currentMillis = millis();
-                if (currentMillis - previousMillis3 >= interval)
-                {
-                    previousMillis3 = currentMillis;
-
-                    sections[2 + 4].drawButton(RED, RED, WHITE, String(currentTemp) + "/" + goalTemp, true);
-                    ++currentTemp;
-                }
-            }
-            if (sectionsState[3] == true)
-            {
-                // TODO: get real temperature
-                unsigned long currentMillis = millis();
-                if (currentMillis - previousMillis4 >= interval)
-                {
-                    previousMillis4 = currentMillis;
-
-                    sections[3 + 4].drawButton(RED, RED, WHITE, String(currentTemp) + "/" + goalTemp, true);
-                    ++currentTemp;
-                }
-            }
-        }
+    if (started == false)
+    {
+        startTime = millis();
+        lastUpdateTime[0] = startTime;
+        started = true;
     }
+
+    unsigned long now = millis(); // get the current time
+    if (now - lastUpdateTime[0] >= updateInterval)
+    {                                                 // check if enough time has passed since the last update
+        unsigned long elapsed = now - startTime;      // calculate the elapsed time
+        unsigned long remaining = duration - elapsed; // calculate the remaining time
+
+        int minutes = remaining / 60000;
+        int seconds = (remaining % 60000) / 1000;
+
+        String output = ("Waiting " + String(minutes) + ':' + String(seconds).substring(0, 2) + 's');
+        if (seconds < 10)
+        {
+            output.replace(":", ":0"); // Add leading zero to seconds if necessary
+        }
+
+        writeHeader(output);
+
+        lastUpdateTime[0] = now; // update the last update time
+    }
+
+    // check if the countdown is complete
+    if (now - startTime >= duration)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 void loop(void)
@@ -316,92 +304,51 @@ void loop(void)
     onof_btn.press(down && onof_btn.contains(pixel_x, pixel_y));
     if (onof_btn.justReleased())
     {
-        onof_btn.drawButton(false);
+        // onof_btn.drawButton(false);
     }
+
     if (onof_btn.justPressed())
     {
-        if (onof_bt_state) // on
+        if (onof_bt_state) // stop heating
         {
-            onof_btn.initButton(&tft, 160, 215, 90, 35, WHITE, GREEN, BLACK, const_cast<char *>("START"), 2);
-            onof_bt_state = false;
-            handleOnOf(onof_bt_state);
-            writeHeader("Select section");
+            showStartScreen();
         }
-        else // of
+        else // start heating
         {
+            // change the on/of button from start to stop
             onof_btn.initButton(&tft, 160, 215, 90, 35, WHITE, RED, WHITE, const_cast<char *>("STOP"), 2);
             onof_bt_state = true;
-            handleOnOf(onof_bt_state);
-            startHeating();
+            writeHeader("Heating");
         }
-        onof_btn.drawButton(true);
+        onof_btn.drawButton(false);
+    }
+
+    // check the temperature and display it on the sections
+    if (onof_bt_state == true)
+    {
+        if (heating())
+        {
+            if (timer())
+            {
+                // stop heating cycle
+                showStartScreen();
+            }
+        }
+    }
+
+    settings_btn.press(down && settings_btn.contains(pixel_x, pixel_y));
+    // if (settings_btn.justReleased())
+    // {
+    //     settings_btn.drawButton(false);
+    //     drawSettingsImage();
+    // }
+    if (settings_btn.justPressed())
+    {
+        // settings_btn.drawButton(true);
+
+        // TODO: show settings menu
     }
 }
-
-// sections[1].press(down && sections[1].contains(pixel_x, pixel_y));
-// touchSection(1);
-
-// sect1_btn.press(down && sect1_btn.contains(pixel_x, pixel_y));
-// if (sect1_btn.justReleased())
-// {
-//     sect1_btn.drawButton(false);
-//     // center_btn.drawButton(false);
-// }
-// if (sect1_btn.justPressed())
-// {
-//     sect1_btn.drawButton(true);
-//     // action
-// }
-
-// sect2_btn.press(down && sect2_btn.contains(pixel_x, pixel_y));
-// if (sect2_btn.justReleased())
-// {
-//     sect2_btn.drawButton(false);
-//     // center_btn.drawButton(false);
-// }
-// if (sect2_btn.justPressed())
-// {
-//     sect2_btn.drawButton(true);
-//     // action
-// }
-
-// sect3_btn.press(down && sect3_btn.contains(pixel_x, pixel_y));
-// if (sect3_btn.justReleased())
-// {
-//     sect3_btn.drawButton(false);
-//     // center_btn.drawButton(false);
-// }
-// if (sect3_btn.justPressed())
-// {
-//     sect3_btn.drawButton(true);
-//     // action
-// }
-
-// sect4_btn.press(down && sect4_btn.contains(pixel_x, pixel_y));
-// if (sect4_btn.justReleased())
-// {
-//     // sect4_btn.drawButton(false);
-//     // center_btn.drawButton(false);
-// }
-// if (sect4_btn.justPressed())
-// {
-//     if (sect4_state) // on
-//     {
-//         sect4_btn.initButton(&tft, 193.5, 153.5, 67, 67, WHITE, BLACK, WHITE, const_cast<char *>(""), 2, 0, 0, 1, 0);
-//         sect4_state = false;
-//         sect4_btn.drawButton();
-//     }
-//     else // of
-//     {
-//         // sect4_btn.initButton(&tft, 193.5, 153.5, 67, 67, RED, BLACK, WHITE, const_cast<char *>(""), 2, 0, 0, 1, 0);
-//         sections[4].drawButton();
-//         sect4_state = true;
-//     }
-
-//     // sect4_btn.drawButton();
-
-//     // action
-// }
 
 // center_btn.press(down && center_btn.contains(pixel_x, pixel_y));
 // if (center_btn.justReleased())
