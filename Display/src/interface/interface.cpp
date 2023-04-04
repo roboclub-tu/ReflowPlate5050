@@ -7,8 +7,9 @@
 #include "settings_btn.h"
 MCUFRIEND_kbv tft;
 
-// #include <TouchScreen.h> //original version (doesn't work with this tft pinout!)
+// TODO: fix the heating section corners. Change rectFill function.
 
+// #include <TouchScreen.h> //original version (doesn't work with this tft pinout!)
 #include "TouchScreen_kbv.h" //edited version
 #define TouchScreen TouchScreen_kbv
 #define TSPoint TSPoint_kbv
@@ -111,7 +112,8 @@ void writeTemp(int section, int temp, int goalTemp = 0)
     tft.print(text);
 }
 
-void drawSettingsImage(){
+void drawSettingsImage()
+{
     tft.drawBitmap(10, 10, setting_btn, 35, 33, WHITE, BLACK);
 }
 
@@ -149,6 +151,16 @@ void setup(void)
     sect2_btn.initButton(&tft, 193.5 + 15, 86.5, 67 + 30, 67, RED, BLACK, WHITE, const_cast<char *>(""), 2, 0, 1, 0, 0);
     sect3_btn.initButton(&tft, 126.5 - 15, 153.5, 67 + 30, 67, RED, BLACK, WHITE, const_cast<char *>(""), 2, 0, 0, 0, 1);
     sect4_btn.initButton(&tft, 193.5 + 15, 153.5, 67 + 30, 67, RED, BLACK, WHITE, const_cast<char *>(""), 2, 0, 0, 1, 0);
+
+    sections.push_back(sect1_btn);
+    sections.push_back(sect2_btn);
+    sections.push_back(sect3_btn);
+    sections.push_back(sect4_btn);
+
+    sect1_btn.initButton(&tft, 126.5 - 15, 86.5, 67 + 30, 67, WHITE, RED, WHITE, const_cast<char *>(""), 2, 1, 0, 0, 0);
+    sect2_btn.initButton(&tft, 193.5 + 15, 86.5, 67 + 30, 67, WHITE, RED, WHITE, const_cast<char *>(""), 2, 0, 1, 0, 0);
+    sect3_btn.initButton(&tft, 126.5 - 15, 153.5, 67 + 30, 67, WHITE, RED, WHITE, const_cast<char *>(""), 2, 0, 0, 0, 1);
+    sect4_btn.initButton(&tft, 193.5 + 15, 153.5, 67 + 30, 67, WHITE, RED, WHITE, const_cast<char *>(""), 2, 0, 0, 1, 0);
 
     sections.push_back(sect1_btn);
     sections.push_back(sect2_btn);
@@ -207,7 +219,8 @@ void showStartScreen()
     onof_bt_state = false;
 }
 
-int currentTemp = 238;
+int initTemp=230;
+int currentTemp = initTemp;
 int goalTemp = 240;
 unsigned long updateInterval = 500;
 unsigned long lastUpdateTime[4];
@@ -230,7 +243,7 @@ bool heating()
                 {
                     lastUpdateTime[i] = now;
 
-                    sections[i + 4].drawButton(RED, RED, WHITE, String(currentTemp) + "/" + goalTemp, true);
+                    sections[i + 8].drawButton(String(currentTemp) + "/" + goalTemp);
                     ++currentTemp;
                 }
             }
@@ -244,7 +257,7 @@ bool heating()
 
 unsigned long timerUpdateInterval = 1000;
 unsigned long startTime;        // start time in milliseconds
-unsigned long duration = 13000; // duration in milliseconds
+unsigned long duration = 5000; // duration in milliseconds
 bool started = false;
 
 bool timer()
@@ -279,6 +292,7 @@ bool timer()
     // check if the countdown is complete
     if (now - startTime >= duration)
     {
+        started=false;
         return true;
     }
 
@@ -332,6 +346,7 @@ void loop(void)
             {
                 // stop heating cycle
                 showStartScreen();
+                currentTemp = initTemp; // simulation required. Probably don't need for real temp
             }
         }
     }
